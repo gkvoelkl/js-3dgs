@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>3D Gaussian Splatting Viewer</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: #0a0a0a;
+      color: #fff;
+      font-family: system-ui, sans-serif;
+      overflow: hidden;
+      height: 100dvh;
+      width: 100dvw;
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    #overlay {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: rgba(10, 10, 10, 0.85);
+      backdrop-filter: blur(6px);
+      gap: 1.2rem;
+      transition: opacity 0.5s ease;
+      z-index: 10;
+    }
+
+    #overlay.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    #overlay h1 {
+      font-size: 1.1rem;
+      font-weight: 400;
+      letter-spacing: 0.08em;
+      color: #aaa;
+    }
+
+    #progress-bar-track {
+      width: min(320px, 80vw);
+      height: 3px;
+      background: #222;
+      border-radius: 2px;
+      overflow: hidden;
+    }
+
+    #progress-bar-fill {
+      height: 100%;
+      width: 0%;
+      background: #fff;
+      border-radius: 2px;
+      transition: width 0.2s ease;
+    }
+
+    #progress-label {
+      font-size: 0.8rem;
+      color: #555;
+      letter-spacing: 0.05em;
+    }
+
+    #error-box {
+      display: none;
+      position: fixed;
+      bottom: 1.5rem;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #1a0000;
+      border: 1px solid #500;
+      color: #f88;
+      padding: 0.7rem 1.2rem;
+      border-radius: 6px;
+      font-size: 0.82rem;
+      max-width: 90vw;
+      z-index: 20;
+    }
+
+    #controls-hint {
+      position: fixed;
+      bottom: 1.5rem;
+      right: 1.5rem;
+      color: #333;
+      font-size: 0.72rem;
+      line-height: 1.7;
+      text-align: right;
+      pointer-events: none;
+      z-index: 5;
+    }
+  </style>
+</head>
+<body>
+
+  <canvas id="canvas"></canvas>
+
+  <div id="overlay">
+    <h1>Lade Szene&hellip;</h1>
+    <div id="progress-bar-track">
+      <div id="progress-bar-fill"></div>
+    </div>
+    <span id="progress-label">0 %</span>
+  </div>
+
+  <div id="error-box"></div>
+
+  <div id="controls-hint">
+    Drehen: linke Maustaste &nbsp;|&nbsp; Zoomen: Scroll &nbsp;|&nbsp; Verschieben: rechte Maustaste
+  </div>
+
+  <script type="module">
+    import * as SPLAT from "https://unpkg.com/gsplat@1.2.9/dist/index.es.js";
+
+    // ---------------------------------------------------------------------------
+    // Szene-URL: entweder per ?url=... Parameter oder hier eintragen
+    // Beispiel lokal: "scans/mein-scan.ply"
+    // ---------------------------------------------------------------------------
+    const DEFAULT_URL = "scans/scene.ply";
+
+    const params  = new URLSearchParams(window.location.search);
+    const fileUrl = params.get("url") || DEFAULT_URL;
+
+    // ---------------------------------------------------------------------------
+    // Setup
+    // ---------------------------------------------------------------------------
+    const canvas   = document.getElementById("canvas");
+    const overlay  = document.getElementById("overlay");
+    const bar      = document.getElementById("progress-bar-fill");
+    const label    = document.getElementById("progress-label");
+    const errorBox = document.getElementById("error-box");
+
+    const scene    = new SPLAT.Scene();
+    const camera   = new SPLAT.Camera();
+    const renderer = new SPLAT.WebGLRenderer(canvas);
+    const controls = new SPLAT.OrbitControls(camera, renderer.canvas);
+
+    function showError(msg) {
+      errorBox.textContent = msg;
+      errorBox.style.display = "block";
+      overlay.classList.add("hidden");
+    }
+
+    async function main() {
+      try {
+        await SPLAT.Loader.LoadAsync(fileUrl, scene, (progress) => {
+          const pct = Math.round(progress * 100);
+          bar.style.width   = pct + "%";
+          label.textContent = pct + " %";
+        });
+      } catch (err) {
+        showError(`Datei konnte nicht geladen werden: ${fileUrl}\n${err.message ?? err}`);
+        return;
+      }
+
+      overlay.classList.add("hidden");
+
+      const frame = () => {
+        controls.update();
+        renderer.render(scene, camera);
+        requestAnimationFrame(frame);
+      };
+      requestAnimationFrame(frame);
+    }
+
+    main();
+  </script>
+</body>
+</html>

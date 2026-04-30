@@ -1,0 +1,8 @@
+[
+  {
+    "name": "Beispiel-Scan",
+    "description": "Kurze Beschreibung des Scans",
+    "file": "scans/scene.ply",
+    "thumbnail": ""
+  }
+]

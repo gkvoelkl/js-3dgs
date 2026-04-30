@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>3D Gaussian Splatting – Galerie</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #0a0a0a;
+      --surface:  #111;
+      --border:   #1e1e1e;
+      --text:     #e8e8e8;
+      --muted:    #555;
+      --accent:   #fff;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: system-ui, -apple-system, sans-serif;
+      min-height: 100dvh;
+      padding: 3rem 1.5rem 4rem;
+    }
+
+    header {
+      max-width: 900px;
+      margin: 0 auto 3rem;
+    }
+
+    header h1 {
+      font-size: clamp(1.4rem, 4vw, 2rem);
+      font-weight: 300;
+      letter-spacing: 0.04em;
+      color: var(--accent);
+    }
+
+    header p {
+      margin-top: 0.5rem;
+      font-size: 0.88rem;
+      color: var(--muted);
+    }
+
+    #grid {
+      max-width: 900px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      gap: 1.2rem;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+      text-decoration: none;
+      color: inherit;
+      display: flex;
+      flex-direction: column;
+      transition: border-color 0.2s, transform 0.2s;
+      cursor: pointer;
+    }
+
+    .card:hover {
+      border-color: #444;
+      transform: translateY(-2px);
+    }
+
+    .card-thumb {
+      width: 100%;
+      aspect-ratio: 4 / 3;
+      background: var(--border);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .card-thumb img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    /* Fallback-Placeholder wenn kein Thumbnail */
+    .card-thumb-placeholder {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, #111 0%, #1a1a1a 100%);
+    }
+
+    .card-thumb-placeholder svg {
+      opacity: 0.15;
+      width: 48px;
+      height: 48px;
+    }
+
+    .card-body {
+      padding: 0.9rem 1rem 1rem;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 0.3rem;
+    }
+
+    .card-name {
+      font-size: 0.95rem;
+      font-weight: 500;
+      color: var(--text);
+    }
+
+    .card-desc {
+      font-size: 0.8rem;
+      color: var(--muted);
+      line-height: 1.5;
+      flex: 1;
+    }
+
+    .card-cta {
+      margin-top: 0.8rem;
+      font-size: 0.75rem;
+      color: #444;
+      letter-spacing: 0.05em;
+      display: flex;
+      align-items: center;
+      gap: 0.3rem;
+    }
+
+    .card-cta::after {
+      content: "→";
+    }
+
+    #loading {
+      max-width: 900px;
+      margin: 0 auto;
+      color: var(--muted);
+      font-size: 0.85rem;
+    }
+
+    #error {
+      display: none;
+      max-width: 900px;
+      margin: 0 auto;
+      background: #1a0000;
+      border: 1px solid #500;
+      color: #f88;
+      padding: 0.8rem 1rem;
+      border-radius: 6px;
+      font-size: 0.82rem;
+    }
+
+    footer {
+      max-width: 900px;
+      margin: 4rem auto 0;
+      font-size: 0.72rem;
+      color: #2a2a2a;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>3D Gaussian Splatting</h1>
+    <p>Mit dem iPhone und Scaniverse aufgenommene Szenen</p>
+  </header>
+
+  <p id="loading">Lade Scan-Liste&hellip;</p>
+  <p id="error"></p>
+  <div id="grid"></div>
+
+  <footer>Powered by <a href="https://github.com/huggingface/gsplat.js" style="color:inherit">gsplat.js</a></footer>
+
+  <script>
+    const grid    = document.getElementById("grid");
+    const loading = document.getElementById("loading");
+    const errorEl = document.getElementById("error");
+
+    // Placeholder-SVG (cube outline)
+    const placeholderSVG = `
+      <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+        <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
+        <line x1="12" y1="22.08" x2="12" y2="12"/>
+      </svg>`;
+
+    function buildCard(scan) {
+      const viewerUrl = `viewer.html?url=${encodeURIComponent(scan.file)}`;
+
+      const card = document.createElement("a");
+      card.className = "card";
+      card.href = viewerUrl;
+
+      const thumb = document.createElement("div");
+      thumb.className = "card-thumb";
+
+      if (scan.thumbnail) {
+        const img = document.createElement("img");
+        img.src = scan.thumbnail;
+        img.alt = scan.name;
+        img.loading = "lazy";
+        thumb.appendChild(img);
+      } else {
+        const ph = document.createElement("div");
+        ph.className = "card-thumb-placeholder";
+        ph.innerHTML = placeholderSVG;
+        thumb.appendChild(ph);
+      }
+
+      const body = document.createElement("div");
+      body.className = "card-body";
+      body.innerHTML = `
+        <div class="card-name">${escapeHtml(scan.name)}</div>
+        <div class="card-desc">${escapeHtml(scan.description || "")}</div>
+        <div class="card-cta">Ansehen</div>
+      `;
+
+      card.appendChild(thumb);
+      card.appendChild(body);
+      return card;
+    }
+
+    function escapeHtml(str) {
+      return str.replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+    }
+
+    fetch("scans.json")
+      .then(r => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+      })
+      .then(scans => {
+        loading.remove();
+        if (!scans.length) {
+          grid.textContent = "Noch keine Scans eingetragen.";
+          return;
+        }
+        scans.forEach(scan => grid.appendChild(buildCard(scan)));
+      })
+      .catch(err => {
+        loading.remove();
+        errorEl.style.display = "block";
+        errorEl.textContent = `scans.json konnte nicht geladen werden: ${err.message}`;
+      });
+  </script>
+</body>
+</html>
