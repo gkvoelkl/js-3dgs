@@ -1,5 +1,7 @@
 # 3D Gaussian Splatting Viewer
 
+**[Live-Demo ansehen: https://gkvoelkl.github.io/js-3dgs/](https://gkvoelkl.github.io/js-3dgs/)**
+
 Ein Browser-Viewer für 3D-Scans im Gaussian-Splatting-Format – aufgenommen mit dem iPhone, angezeigt ohne Installation direkt im Browser.
 
 ---
