@@ -172,7 +172,7 @@
   <p id="error"></p>
   <div id="grid"></div>
 
-  <footer>Powered by <a href="https://github.com/huggingface/gsplat.js" style="color:inherit">gsplat.js</a></footer>
+  <footer>Powered by <a href="https://github.com/mkkellogg/GaussianSplats3D" style="color:inherit">GaussianSplats3D</a></footer>
 
   <script>
     const grid    = document.getElementById("grid");
@@ -188,7 +188,11 @@
       </svg>`;
 
     function buildCard(scan) {
-      const viewerUrl = `viewer.html?url=${encodeURIComponent(scan.file)}`;
+      const p = new URLSearchParams({ url: scan.file });
+      if (scan.cameraPosition) p.set("cp", JSON.stringify(scan.cameraPosition));
+      if (scan.cameraLookAt)   p.set("cl", JSON.stringify(scan.cameraLookAt));
+      if (scan.cameraUp)       p.set("cu", JSON.stringify(scan.cameraUp));
+      const viewerUrl = `viewer.html?${p.toString()}`;
 
       const card = document.createElement("a");
       card.className = "card";

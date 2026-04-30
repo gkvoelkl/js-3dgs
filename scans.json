@@ -1,8 +1,11 @@
 [
   {
-    "name": "Beispiel-Scan",
-    "description": "Kurze Beschreibung des Scans",
-    "file": "scans/scene.ply",
-    "thumbnail": ""
+    "name": "Regensburg Stadtmodell",
+    "description": "Stadtmodell von Regensburg an der Wurstkuchl",
+    "file": "scans/innenstadt.spz",
+    "thumbnail": "images/innenstadt.png",
+    "cameraPosition": [0.52, 1.15, 0.3],
+    "cameraLookAt": [-0.19, 0.2, -0.13],
+    "cameraUp": [0, 1, 0]
   }
 ]

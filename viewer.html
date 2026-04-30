@@ -4,8 +4,16 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>3D Gaussian Splatting Viewer</title>
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.176.0/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@0.176.0/examples/jsm/"
+    }
+  }
+  </script>
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     body {
       background: #0a0a0a;
@@ -16,12 +24,12 @@
       width: 100dvw;
     }
 
-    canvas {
-      display: block;
+    #viewer-container {
       width: 100%;
       height: 100%;
     }
 
+    /* Overlay liegt über dem vom Viewer erzeugten Canvas */
     #overlay {
       position: fixed;
       inset: 0;
@@ -34,11 +42,11 @@
       gap: 1.2rem;
       transition: opacity 0.5s ease;
       z-index: 10;
+      pointer-events: none;
     }
 
     #overlay.hidden {
       opacity: 0;
-      pointer-events: none;
     }
 
     #overlay h1 {
@@ -84,24 +92,64 @@
       font-size: 0.82rem;
       max-width: 90vw;
       z-index: 20;
+      text-align: center;
+      white-space: pre-wrap;
     }
 
     #controls-hint {
       position: fixed;
       bottom: 1.5rem;
       right: 1.5rem;
-      color: #333;
+      color: #2a2a2a;
       font-size: 0.72rem;
       line-height: 1.7;
       text-align: right;
       pointer-events: none;
       z-index: 5;
     }
+
+    #back-link {
+      position: fixed;
+      top: 1.2rem;
+      left: 1.2rem;
+      color: #333;
+      font-size: 0.78rem;
+      text-decoration: none;
+      letter-spacing: 0.04em;
+      z-index: 15;
+      transition: color 0.2s;
+    }
+
+    #back-link:hover { color: #aaa; }
+
+    #camera-info {
+      display: none;
+      position: fixed;
+      top: 1.2rem;
+      right: 1.2rem;
+      background: rgba(0, 0, 0, 0.75);
+      border: 1px solid #333;
+      border-radius: 6px;
+      padding: 0.8rem 1rem;
+      font-size: 0.72rem;
+      font-family: ui-monospace, monospace;
+      color: #ccc;
+      line-height: 1.8;
+      z-index: 15;
+      pointer-events: none;
+    }
+
+    #camera-info.visible { display: block; }
+
+    #camera-info .label { color: #555; }
+    #camera-info .val   { color: #fff; }
+    #camera-info .hint  { color: #333; margin-top: 0.4rem; font-size: 0.65rem; }
   </style>
 </head>
 <body>
 
-  <canvas id="canvas"></canvas>
+  <a id="back-link" href="index.html">← Galerie</a>
+  <div id="viewer-container"></div>
 
   <div id="overlay">
     <h1>Lade Szene&hellip;</h1>
@@ -113,35 +161,40 @@
 
   <div id="error-box"></div>
 
+  <div id="camera-info">
+    <div><span class="label">cameraPosition  </span><span class="val" id="ci-pos">–</span></div>
+    <div><span class="label">cameraLookAt    </span><span class="val" id="ci-look">–</span></div>
+    <div><span class="label">cameraUp        </span><span class="val" id="ci-up">–</span></div>
+    <div class="hint">K = ausblenden</div>
+  </div>
+
   <div id="controls-hint">
     Drehen: linke Maustaste &nbsp;|&nbsp; Zoomen: Scroll &nbsp;|&nbsp; Verschieben: rechte Maustaste
   </div>
 
   <script type="module">
-    import * as SPLAT from "https://unpkg.com/gsplat@1.2.9/dist/index.es.js";
-
-    // ---------------------------------------------------------------------------
-    // Szene-URL: entweder per ?url=... Parameter oder hier eintragen
-    // Beispiel lokal: "scans/mein-scan.ply"
-    // ---------------------------------------------------------------------------
     const DEFAULT_URL = "scans/scene.ply";
 
-    const params  = new URLSearchParams(window.location.search);
-    const fileUrl = params.get("url") || DEFAULT_URL;
+    const params   = new URLSearchParams(window.location.search);
+    const fileUrl  = params.get("url") || DEFAULT_URL;
 
-    // ---------------------------------------------------------------------------
-    // Setup
-    // ---------------------------------------------------------------------------
-    const canvas   = document.getElementById("canvas");
+    function parseVec(str, fallback) {
+      if (!str) return fallback;
+      try {
+        const v = JSON.parse(str);
+        if (Array.isArray(v) && v.length === 3) return v;
+      } catch (_) {}
+      return fallback;
+    }
+
+    const cameraPosition = parseVec(params.get("cp"),  [-1, -4,  6]);
+    const cameraLookAt   = parseVec(params.get("cl"),  [ 0,  0,  0]);
+    const cameraUp       = parseVec(params.get("cu"),  [ 0,  1,  0]);
+
     const overlay  = document.getElementById("overlay");
     const bar      = document.getElementById("progress-bar-fill");
     const label    = document.getElementById("progress-label");
     const errorBox = document.getElementById("error-box");
-
-    const scene    = new SPLAT.Scene();
-    const camera   = new SPLAT.Camera();
-    const renderer = new SPLAT.WebGLRenderer(canvas);
-    const controls = new SPLAT.OrbitControls(camera, renderer.canvas);
 
     function showError(msg) {
       errorBox.textContent = msg;
@@ -149,29 +202,95 @@
       overlay.classList.add("hidden");
     }
 
+    function setStatus(msg) {
+      overlay.querySelector("h1").textContent = msg;
+    }
+
     async function main() {
+      // 1. Datei vorhanden?
+      setStatus("Prüfe Datei…");
       try {
-        await SPLAT.Loader.LoadAsync(fileUrl, scene, (progress) => {
-          const pct = Math.round(progress * 100);
-          bar.style.width   = pct + "%";
-          label.textContent = pct + " %";
+        const probe = await fetch(fileUrl, { method: "HEAD" });
+        if (!probe.ok) {
+          showError(`Datei nicht gefunden (${probe.status}): ${fileUrl}`);
+          return;
+        }
+      } catch (e) {
+        showError(`Netzwerkfehler: ${e.message}`);
+        return;
+      }
+
+      // 2. Bibliothek laden
+      setStatus("Lade Bibliothek…");
+      let GaussianSplats3D;
+      try {
+        GaussianSplats3D = await import(
+          "https://unpkg.com/@mkkellogg/gaussian-splats-3d@0.4.7/build/gaussian-splats-3d.module.js"
+        );
+      } catch (e) {
+        showError(`Bibliothek konnte nicht geladen werden: ${e.message}`);
+        return;
+      }
+
+      // 3. Viewer initialisieren
+      setStatus("Lade Szene…");
+      const viewer = new GaussianSplats3D.Viewer({
+        rootElement: document.getElementById("viewer-container"),
+        showLoadingUI: false,
+        selfDrivenMode: true,
+        sharedMemoryForWorkers: false,
+        gpuAcceleratedSort: false,
+        cameraUp,
+        initialCameraPosition: cameraPosition,
+        initialCameraLookAt:   cameraLookAt,
+      });
+
+      try {
+        await viewer.addSplatScene(fileUrl, {
+          splatAlphaRemovalThreshold: 5,
+          onProgress: (pct) => {
+            bar.style.width   = pct + "%";
+            label.textContent = Math.round(pct) + " %";
+          },
         });
-      } catch (err) {
-        showError(`Datei konnte nicht geladen werden: ${fileUrl}\n${err.message ?? err}`);
+      } catch (e) {
+        showError(`Szene konnte nicht geladen werden: ${e.message ?? e}`);
         return;
       }
 
       overlay.classList.add("hidden");
+      viewer.start();
 
-      const frame = () => {
-        controls.update();
-        renderer.render(scene, camera);
-        requestAnimationFrame(frame);
-      };
-      requestAnimationFrame(frame);
+      // K-Taste: Kamerakoordinaten ein-/ausblenden
+      const camInfo  = document.getElementById("camera-info");
+      const ciPos    = document.getElementById("ci-pos");
+      const ciLook   = document.getElementById("ci-look");
+      const ciUp     = document.getElementById("ci-up");
+
+      function fmt(v) {
+        return `[${[v.x, v.y, v.z].map(n => +n.toFixed(2)).join(", ")}]`;
+      }
+
+      function updateCameraInfo() {
+        const cam     = viewer.camera;
+        const target  = viewer.controls?.target ?? { x: 0, y: 0, z: 0 };
+        ciPos.textContent  = fmt(cam.position);
+        ciLook.textContent = fmt(target);
+        ciUp.textContent   = fmt(cam.up);
+      }
+
+      window.addEventListener("keydown", (e) => {
+        if (e.key !== "k" && e.key !== "K") return;
+        if (camInfo.classList.toggle("visible")) updateCameraInfo();
+      });
+
+      // Werte live aktualisieren solange sichtbar
+      viewer.renderLoop?.addEventListener("beforeRender", () => {
+        if (camInfo.classList.contains("visible")) updateCameraInfo();
+      });
     }
 
-    main();
+    main().catch(e => showError(`Unbekannter Fehler: ${e.message ?? e}`));
   </script>
 </body>
 </html>
