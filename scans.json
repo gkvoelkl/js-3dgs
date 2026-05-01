@@ -7,5 +7,34 @@
     "cameraPosition": [0.52, 1.15, 0.3],
     "cameraLookAt": [-0.19, 0.2, -0.13],
     "cameraUp": [0, 1, 0]
+  },
+  {
+    "name": "Regensburg Domplatz, Ludwig I.",
+    "description": "Denkmal Ludwig I. in Regensburg am Domplatz",
+    "file": "scans/innenstadt_2.spz",
+    "thumbnail": "images/innenstadt_2.png",
+    "cameraPosition": [-1.41, 3.85, -7.34],
+    "cameraLookAt": [0.66,1.9,-0.24],
+    "cameraUp": [0, 1, 0]
+  },
+  {
+    "name": "Erfurt, Zitadelle",
+    "description": "Zitadelle Petersberg in Erfurt, Thüringen",
+    "file": "scans/erfurt.spz",
+    "thumbnail": "images/erfurt.png",
+    "cameraPosition": [-7.29, -0.67, 0.57],
+    "cameraLookAt": [0.81,1.15,-1.13],
+    "cameraUp": [0, 1, 0]
+  },
+  {
+    "name": "Erfurt, Zitadelle Modell",
+    "description": "Modell der Zitadelle Petersberg in Erfurt",
+    "file": "scans/erfurt_2.spz",
+    "thumbnail": "images/erfurt_2.png",
+    "cameraPosition": [-1.99, 0.52, 0.52],
+    "cameraLookAt": [-0.35,-0.3,-0.04],
+    "cameraUp": [0, 1, 0]
   }
+
+
 ]
